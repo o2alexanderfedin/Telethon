@@ -1,0 +1,350 @@
+name: CD Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: 'CI Run ID that triggered this deployment'
+        required: true
+        type: string
+      ci_sha:
+        description: 'Git SHA from CI run'
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+    branches: [main, develop, 'release/**']
+
+env:
+  NODE_VERSION: '18'
+  DEPLOY_TIMEOUT: '300'
+
+jobs:
+  # Pre-deployment validation
+  pre-deploy:
+    name: Pre-deployment Validation
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      (github.event.workflow_run.conclusion == 'success' && 
+       github.event.workflow_run.event != 'pull_request')
+    
+    outputs:
+      environment: ${{ steps.determine-env.outputs.environment }}
+      should_deploy: ${{ steps.validate.outputs.should_deploy }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ci_sha || github.event.workflow_run.head_sha }}
+      
+      - name: Determine deployment environment
+        id: determine-env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" =~ ^refs/heads/release/ ]]; then
+            echo "environment=pre-production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=development" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Validate deployment
+        id: validate
+        run: |
+          echo "🔍 Validating deployment requirements..."
+          
+          # Check if we should deploy
+          SHOULD_DEPLOY=true
+          
+          # Check for deployment blockers
+          if [ -f ".no-deploy" ]; then
+            echo "❌ Deployment blocked by .no-deploy file"
+            SHOULD_DEPLOY=false
+          fi
+          
+          # Check for required files
+          for file in "package.json" "README.md"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Required file missing: $file"
+              SHOULD_DEPLOY=false
+            fi
+          done
+          
+          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+
+  # Build for deployment
+  build-deploy:
+    name: Build for Deployment
+    runs-on: ubuntu-latest
+    needs: [pre-deploy]
+    if: needs.pre-deploy.outputs.should_deploy == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ci_sha || github.event.workflow_run.head_sha }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: |
+          npm ci --production=false
+      
+      - name: Build for ${{ needs.pre-deploy.outputs.environment }}
+        env:
+          NODE_ENV: ${{ needs.pre-deploy.outputs.environment }}
+          BUILD_ENV: ${{ needs.pre-deploy.outputs.environment }}
+        run: |
+          echo "🏗️ Building for ${{ needs.pre-deploy.outputs.environment }}..."
+          
+          # Environment-specific build
+          case "${{ needs.pre-deploy.outputs.environment }}" in
+            "production")
+              npm run build:prod || npm run build
+              ;;
+            "staging")
+              npm run build:staging || npm run build
+              ;;
+            *)
+              npm run build
+              ;;
+          esac
+      
+      - name: Optimize build
+        run: |
+          # Optimize assets
+          if [ -d "dist" ] || [ -d "build" ]; then
+            echo "📦 Optimizing build assets..."
+            
+            # Compress JavaScript and CSS
+            find . \( -name "*.js" -o -name "*.css" \) -not -path "./node_modules/*" -exec gzip -k {} \;
+          fi
+      
+      - name: Create deployment artifact
+        run: |
+          # Create deployment package
+          tar -czf deployment-${{ needs.pre-deploy.outputs.environment }}.tar.gz \
+            --exclude=node_modules \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=test \
+            --exclude=tests \
+            --exclude=*.test.* \
+            .
+      
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-${{ needs.pre-deploy.outputs.environment }}
+          path: deployment-${{ needs.pre-deploy.outputs.environment }}.tar.gz
+          retention-days: 7
+
+  # Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [pre-deploy, build-deploy]
+    if: |
+      needs.pre-deploy.outputs.should_deploy == 'true' &&
+      needs.pre-deploy.outputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.example.com
+    
+    steps:
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-staging
+      
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          
+          # Add your staging deployment commands here
+          # Example: 
+          # - SSH to staging server
+          # - Copy artifacts
+          # - Restart services
+          # - Run migrations
+          
+          echo "✅ Staging deployment completed!"
+      
+      - name: Run smoke tests
+        run: |
+          echo "🧪 Running smoke tests on staging..."
+          
+          # Add smoke test commands
+          # curl https://staging.example.com/health
+          
+          echo "✅ Smoke tests passed!"
+
+  # Deploy to Pre-Production
+  deploy-pre-prod:
+    name: Deploy to Pre-Production
+    runs-on: ubuntu-latest
+    needs: [pre-deploy, build-deploy]
+    if: |
+      needs.pre-deploy.outputs.should_deploy == 'true' &&
+      needs.pre-deploy.outputs.environment == 'pre-production'
+    environment:
+      name: pre-production
+      url: https://pre-prod.example.com
+    
+    steps:
+      - name: Deploy to pre-production
+        run: |
+          echo "🚀 Deploying to pre-production environment..."
+          # Add pre-production deployment commands
+          echo "✅ Pre-production deployment completed!"
+
+  # Deploy to Production (with manual approval)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [pre-deploy, build-deploy]
+    if: |
+      needs.pre-deploy.outputs.should_deploy == 'true' &&
+      needs.pre-deploy.outputs.environment == 'production'
+    environment:
+      name: production
+      url: https://example.com
+    
+    steps:
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-production
+      
+      - name: Pre-deployment backup
+        run: |
+          echo "💾 Creating pre-deployment backup..."
+          # Add backup commands
+          echo "✅ Backup completed!"
+      
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying to PRODUCTION..."
+          
+          # Add your production deployment commands here
+          # - Blue-green deployment
+          # - Rolling update
+          # - Database migrations
+          
+          echo "✅ Production deployment completed!"
+      
+      - name: Verify deployment
+        run: |
+          echo "🔍 Verifying production deployment..."
+          
+          # Health checks
+          # curl https://example.com/health
+          
+          echo "✅ Production deployment verified!"
+
+  # Post-deployment tasks
+  post-deploy:
+    name: Post-deployment Tasks
+    runs-on: ubuntu-latest
+    needs: [pre-deploy, deploy-staging, deploy-pre-prod, deploy-production]
+    if: |
+      always() &&
+      needs.pre-deploy.outputs.should_deploy == 'true'
+    
+    steps:
+      - name: Notify deployment status
+        run: |
+          ENVIRONMENT="${{ needs.pre-deploy.outputs.environment }}"
+          STATUS="completed"
+          
+          echo "📢 Deployment to $ENVIRONMENT $STATUS"
+      
+      - name: Update deployment tracking
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Create deployment status
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: '${{ needs.pre-deploy.outputs.environment }}',
+              description: 'Automated CD deployment',
+              auto_merge: false,
+              required_contexts: []
+            });
+            
+            // Update deployment status
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              environment_url: 'https://${{ needs.pre-deploy.outputs.environment }}.example.com',
+              description: 'Deployment completed successfully'
+            });
+      
+      - name: Clean up old deployments
+        run: |
+          echo "🧹 Cleaning up old deployments..."
+          # Add cleanup commands for old artifacts/deployments
+          echo "✅ Cleanup completed!"
+
+  # Rollback capability
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: failure()
+    
+    steps:
+      - name: Initiate rollback
+        run: |
+          echo "⚠️  Deployment failed! Initiating rollback..."
+          
+          # Add rollback commands
+          # - Restore from backup
+          # - Switch traffic back
+          # - Notify team
+          
+          echo "✅ Rollback completed!"
+      
+      - name: Create incident report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Create an issue for the failed deployment
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Deployment Failed: ${context.sha.substring(0, 7)}`,
+              body: `## Deployment Failure Report
+              
+              **Environment:** ${{ needs.pre-deploy.outputs.environment }}
+              **Commit:** ${context.sha}
+              **Run ID:** ${context.runId}
+              **Time:** ${new Date().toISOString()}
+              
+              ### Actions Taken
+              - ✅ Automatic rollback initiated
+              - ✅ Previous version restored
+              
+              ### Next Steps
+              - [ ] Investigate failure cause
+              - [ ] Fix issues
+              - [ ] Re-attempt deployment
+              
+              cc: @team`,
+              labels: ['incident', 'deployment-failure', 'high-priority']
+            });

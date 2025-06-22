@@ -1,0 +1,22 @@
+# ShellCheck configuration file
+# https://www.shellcheck.net/wiki/Ignore
+
+# Allow sourcing files from PATH
+disable=SC1091
+
+# Allow word splitting when we know it's safe
+disable=SC2086
+
+# We use [[ ]] for conditionals
+enable=require-double-brackets
+
+# Enable additional checks
+enable=check-unassigned-uppercase
+enable=deprecate-which
+enable=quote-safe-variables
+
+# Set shell if not specified
+shell=bash
+
+# External sources
+external-sources=true

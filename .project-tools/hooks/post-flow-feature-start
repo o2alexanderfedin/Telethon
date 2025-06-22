@@ -1,0 +1,174 @@
+#!/bin/bash
+
+# Post-flow-feature-start hook: Enhanced with automatic task linking
+
+FEATURE_NAME=$1
+FEATURE_BRANCH="feature/$FEATURE_NAME"
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+echo -e "\n${GREEN}✅ Feature branch created: ${YELLOW}$FEATURE_BRANCH${NC}"
+
+# Create .claude directory if it doesn't exist
+mkdir -p .claude
+
+# Create enhanced GitFlow status file
+cat > .claude/gitflow-status.env << EOF
+# GitFlow Feature Status
+GITFLOW_ACTIVE=true
+GITFLOW_TYPE=feature
+GITFLOW_BRANCH=$FEATURE_BRANCH
+GITFLOW_FEATURE_NAME=$FEATURE_NAME
+GITFLOW_STARTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+GITFLOW_STATUS=in_progress
+FEATURE_DESCRIPTION="TODO: Add feature description"
+GITFLOW_COMMIT_COUNT=0
+GITFLOW_LAST_COMMIT=""
+GITFLOW_LAST_PUSH=""
+
+# Kanban Integration
+KANBAN_CURRENT_TASK=""
+KANBAN_TASK_STATUS=""
+KANBAN_RELATED_ISSUES=""
+EOF
+
+echo -e "${GREEN}✅ Created .claude/gitflow-status.env${NC}"
+
+# Try to find related Kanban items
+echo -e "\n${PURPLE}📊 Kanban Integration:${NC}"
+
+KANBAN_SCRIPT="./tools/github-project-management/utilities/get-next-kanban-item.sh"
+if [ -f "$KANBAN_SCRIPT" ]; then
+    echo -e "${BLUE}Searching for tasks related to '$FEATURE_NAME'...${NC}"
+    
+    # Try to find task by feature name
+    PROJECT_OWNER="o2alexanderfedin"
+    REPO_NAME="telethon-architecture-docs"
+    
+    # Search for issues with feature name
+    MATCHING_ISSUES=$(gh issue list --repo "$PROJECT_OWNER/$REPO_NAME" --search "$FEATURE_NAME" --json number,title,state --jq '.[] | select(.state == "OPEN")')
+    
+    if [ -n "$MATCHING_ISSUES" ]; then
+        echo -e "${GREEN}Found potentially related tasks:${NC}"
+        echo "$MATCHING_ISSUES" | jq -r '"  #\(.number): \(.title)"'
+        
+        # If only one match, auto-link it
+        MATCH_COUNT=$(echo "$MATCHING_ISSUES" | jq -s 'length')
+        if [ "$MATCH_COUNT" -eq 1 ]; then
+            TASK_NUMBER=$(echo "$MATCHING_ISSUES" | jq -r '.number')
+            echo "$TASK_NUMBER" > .claude/current-task.txt
+            echo -e "\n${GREEN}✅ Auto-linked task #$TASK_NUMBER to this feature${NC}"
+            
+            # Update task status to In Progress
+            ./tools/github-project-management/utilities/update-task-status.sh "$TASK_NUMBER" "In Progress" 2>/dev/null || true
+        else
+            echo -e "\n${YELLOW}Multiple matches found. Please select the correct task:${NC}"
+            echo -e "${BLUE}echo '<task-number>' > .claude/current-task.txt${NC}"
+        fi
+    else
+        # No matches, suggest getting next task
+        echo -e "${YELLOW}No tasks found matching '$FEATURE_NAME'${NC}"
+        echo -e "\n${BLUE}Getting next available task...${NC}"
+        
+        # Show next available task but don't auto-assign
+        NEXT_TASK=$($KANBAN_SCRIPT 2>&1 | grep "Issue #" | head -1 | grep -oE "#[0-9]+" | tr -d '#')
+        
+        if [ -n "$NEXT_TASK" ]; then
+            echo -e "\n${YELLOW}Suggested task: #$NEXT_TASK${NC}"
+            echo -e "${BLUE}To link this task:${NC}"
+            echo -e "  1. ${GREEN}echo '$NEXT_TASK' > .claude/current-task.txt${NC}"
+            echo -e "  2. ${GREEN}./tools/github-project-management/utilities/update-task-status.sh $NEXT_TASK 'In Progress'${NC}"
+            echo -e "\n${BLUE}Or get a different task:${NC}"
+            echo -e "  ${GREEN}$KANBAN_SCRIPT --auto-assign${NC}"
+        fi
+    fi
+else
+    echo -e "${YELLOW}Kanban scripts not found${NC}"
+fi
+
+# Create task tracking file
+cat >> .claude/gitflow-status.env << EOF
+
+# Task Tracking
+LINKED_TASK_NUMBER="$(cat .claude/current-task.txt 2>/dev/null || echo '')"
+TASK_LINKED_AT="$([ -f .claude/current-task.txt ] && date -u +"%Y-%m-%dT%H:%M:%SZ" || echo '')"
+TASK_STATUS="$([ -f .claude/current-task.txt ] && echo 'In Progress' || echo 'Not Linked')"
+EOF
+
+# GitFlow reminders
+echo -e "\n${PURPLE}📌 GitFlow Next Steps:${NC}"
+echo -e "  1. ${YELLOW}Link a task${NC} if not auto-linked above"
+echo -e "  2. ${YELLOW}Update FEATURE_DESCRIPTION${NC} in .claude/gitflow-status.env"
+echo -e "  3. Make your changes and commit"
+echo -e "  4. Push with: ${GREEN}git push -u origin $FEATURE_BRANCH${NC}"
+echo -e "  5. When done: ${GREEN}git flow feature finish $FEATURE_NAME${NC}"
+
+# Create a feature plan template
+cat > .claude/feature-plan-$FEATURE_NAME.md << EOF
+# Feature: $FEATURE_NAME
+
+## Description
+TODO: Add feature description
+
+## Linked Task
+$([ -f .claude/current-task.txt ] && echo "- Task #$(cat .claude/current-task.txt)" || echo "- No task linked yet")
+
+## Implementation Plan
+1. TODO: First step
+2. TODO: Second step
+3. TODO: Third step
+
+## Testing Strategy
+- [ ] Unit tests
+- [ ] Integration tests
+- [ ] Manual testing
+
+## Documentation Updates
+- [ ] Code comments
+- [ ] README updates
+- [ ] API documentation
+
+## Definition of Done
+- [ ] All tasks completed
+- [ ] Tests passing
+- [ ] Documentation updated
+- [ ] Code reviewed
+- [ ] Merged to develop
+- [ ] Task status updated to Done
+EOF
+
+echo -e "${GREEN}✅ Created feature plan template: .claude/feature-plan-$FEATURE_NAME.md${NC}"
+
+# Show architecture documentation hint
+echo -e "\n${PURPLE}📚 Architecture Documentation:${NC}"
+if [ -n "$TASK_NUMBER" ]; then
+    echo -e "${BLUE}When task status changes to 'In Progress', relevant architecture docs will be shown.${NC}"
+    echo -e "${YELLOW}Always consult technical documentation before implementation!${NC}"
+else
+    echo -e "${YELLOW}Link a task to get architecture guidance:${NC}"
+    echo -e "  • Technical specifications"
+    echo -e "  • Design patterns to follow"
+    echo -e "  • Implementation guidelines"
+fi
+
+echo -e "\n${BLUE}Quick architecture references:${NC}"
+echo -e "  • Voice Transcription: ${GREEN}docs/features/voice-transcription/${NC}"
+echo -e "  • Telethon Core: ${GREEN}docs/architecture/${NC}"
+echo -e "  • API Design: ${GREEN}docs/api/${NC}"
+
+# Important reminder
+echo -e "\n${RED}⚠️  IMPORTANT:${NC}"
+echo -e "${YELLOW}This feature branch enforces GitFlow workflow:${NC}"
+echo -e "  • Direct commits to main/develop are ${RED}blocked${NC}"
+echo -e "  • Task must be ${GREEN}'In Progress'${NC} before commits"
+echo -e "  • Task will be marked ${GREEN}'Done'${NC} on feature finish"
+echo -e "  • ${BLUE}Architecture docs${NC} will be consulted automatically"
+echo -e "  • ${BLUE}Completion report${NC} will be added to task"
+
+echo -e "\n${GREEN}Feature branch is ready! Start by linking/selecting a task. 🚀${NC}\n"

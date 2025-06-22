@@ -1,0 +1,411 @@
+#!/bin/bash
+
+# Post-push hook: Monitor GitHub CI/CD and auto-fix failures
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Get current branch and commit
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+LAST_COMMIT=$(git rev-parse HEAD)
+REPO_OWNER=$(git remote get-url origin | sed -E 's/.*github.com[:/]([^/]+)\/.*/\1/')
+REPO_NAME=$(git remote get-url origin | sed -E 's/.*github.com[:/][^/]+\/([^.]+)(\.git)?$/\1/')
+
+echo -e "\n${GREEN}✅ Push completed successfully!${NC}"
+echo -e "${BLUE}Repository: ${YELLOW}$REPO_OWNER/$REPO_NAME${NC}"
+echo -e "${BLUE}Branch: ${YELLOW}$CURRENT_BRANCH${NC}"
+echo -e "${BLUE}Commit: ${YELLOW}${LAST_COMMIT:0:7}${NC}"
+
+# Function to check CI status
+check_ci_status() {
+    local check_count=0
+    local max_checks=30  # 5 minutes timeout (30 * 10 seconds)
+    local status=""
+    local conclusion=""
+    
+    echo -e "\n${PURPLE}🔄 Monitoring CI/CD Status...${NC}"
+    echo -e "${BLUE}Waiting for checks to start...${NC}"
+    
+    while [ $check_count -lt $max_checks ]; do
+        # Get workflow runs for this commit
+        RUNS=$(gh api repos/$REPO_OWNER/$REPO_NAME/commits/$LAST_COMMIT/check-runs 2>/dev/null)
+        
+        if [ -n "$RUNS" ]; then
+            # Parse status
+            TOTAL_RUNS=$(echo "$RUNS" | jq '.total_count')
+            COMPLETED=$(echo "$RUNS" | jq '[.check_runs[] | select(.status == "completed")] | length')
+            IN_PROGRESS=$(echo "$RUNS" | jq '[.check_runs[] | select(.status == "in_progress")] | length')
+            QUEUED=$(echo "$RUNS" | jq '[.check_runs[] | select(.status == "queued")] | length')
+            
+            if [ "$TOTAL_RUNS" -gt 0 ]; then
+                echo -ne "\r${BLUE}CI Status: ${NC}"
+                echo -ne "Total: ${YELLOW}$TOTAL_RUNS${NC} | "
+                echo -ne "Completed: ${GREEN}$COMPLETED${NC} | "
+                echo -ne "Running: ${CYAN}$IN_PROGRESS${NC} | "
+                echo -ne "Queued: ${YELLOW}$QUEUED${NC}    "
+                
+                # Check for failures
+                FAILURES=$(echo "$RUNS" | jq '[.check_runs[] | select(.conclusion == "failure")] | length')
+                if [ "$FAILURES" -gt 0 ]; then
+                    echo -e "\n${RED}❌ CI/CD Failed! Found $FAILURES failing checks.${NC}"
+                    return 1
+                fi
+                
+                # All completed successfully?
+                if [ "$COMPLETED" -eq "$TOTAL_RUNS" ] && [ "$TOTAL_RUNS" -gt 0 ]; then
+                    echo -e "\n${GREEN}✅ All CI/CD checks passed!${NC}"
+                    return 0
+                fi
+            fi
+        fi
+        
+        sleep 10
+        ((check_count++))
+    done
+    
+    echo -e "\n${YELLOW}⚠️  Timeout waiting for CI/CD checks${NC}"
+    return 2
+}
+
+# Function to analyze and fix failures
+fix_ci_failures() {
+    echo -e "\n${PURPLE}🔧 Analyzing CI/CD failures...${NC}"
+    
+    # Get detailed failure information
+    FAILED_CHECKS=$(gh api repos/$REPO_OWNER/$REPO_NAME/commits/$LAST_COMMIT/check-runs --jq '.check_runs[] | select(.conclusion == "failure")')
+    
+    # Create fix branch
+    FIX_BRANCH="fix/ci-failure-${LAST_COMMIT:0:7}"
+    echo -e "\n${BLUE}Creating fix branch: ${YELLOW}$FIX_BRANCH${NC}"
+    git checkout -b "$FIX_BRANCH"
+    
+    # Track fixes made
+    FIXES_MADE=false
+    
+    # Analyze each failure
+    echo "$FAILED_CHECKS" | jq -r '.name' | while read -r CHECK_NAME; do
+        echo -e "\n${RED}Failed check: ${YELLOW}$CHECK_NAME${NC}"
+        
+        # Get failure details
+        CHECK_ID=$(echo "$FAILED_CHECKS" | jq -r --arg name "$CHECK_NAME" 'select(.name == $name) | .id')
+        ANNOTATIONS=$(gh api repos/$REPO_OWNER/$REPO_NAME/check-runs/$CHECK_ID/annotations 2>/dev/null)
+        
+        case "$CHECK_NAME" in
+            *"lint"*|*"eslint"*|*"prettier"*)
+                echo -e "${BLUE}Attempting to fix linting issues...${NC}"
+                if [ -f "package.json" ] && grep -q "lint:fix" package.json; then
+                    npm run lint:fix
+                    FIXES_MADE=true
+                elif [ -f "package.json" ] && grep -q "prettier" package.json; then
+                    npx prettier --write .
+                    FIXES_MADE=true
+                fi
+                ;;
+                
+            *"test"*|*"jest"*|*"pytest"*)
+                echo -e "${BLUE}Test failures detected...${NC}"
+                # Parse test failures
+                if [ -n "$ANNOTATIONS" ]; then
+                    echo "$ANNOTATIONS" | jq -r '.[] | "File: \(.path):\(.start_line) - \(.message)"'
+                fi
+                echo -e "${YELLOW}Manual intervention required for test failures${NC}"
+                create_fix_todo "test" "$CHECK_NAME"
+                ;;
+                
+            *"build"*|*"compile"*)
+                echo -e "${BLUE}Build failures detected...${NC}"
+                # Common build fixes
+                if [ -f "package.json" ]; then
+                    echo -e "${BLUE}Checking for missing dependencies...${NC}"
+                    npm install
+                    FIXES_MADE=true
+                fi
+                ;;
+                
+            *"security"*|*"audit"*)
+                echo -e "${BLUE}Security issues detected...${NC}"
+                if [ -f "package.json" ]; then
+                    npm audit fix
+                    FIXES_MADE=true
+                fi
+                ;;
+                
+            *"markdownlint"*|*"markdown"*)
+                echo -e "${BLUE}Fixing markdown issues...${NC}"
+                if command -v markdownlint &> /dev/null; then
+                    markdownlint --fix "**/*.md"
+                    FIXES_MADE=true
+                fi
+                ;;
+        esac
+    done
+    
+    # If fixes were made, commit and push
+    if [ "$FIXES_MADE" = true ]; then
+        echo -e "\n${GREEN}✅ Automated fixes applied!${NC}"
+        
+        # Check for changes
+        if ! git diff --quiet; then
+            git add -A
+            git commit -m "fix: automated CI/CD fixes for ${CHECK_NAME}
+
+- Applied linting fixes
+- Updated dependencies
+- Fixed formatting issues
+
+Original failure on commit: $LAST_COMMIT"
+            
+            echo -e "${BLUE}Pushing fix branch...${NC}"
+            git push -u origin "$FIX_BRANCH"
+            
+            echo -e "\n${GREEN}Creating pull request...${NC}"
+            gh pr create \
+                --title "Fix: CI/CD failures from ${LAST_COMMIT:0:7}" \
+                --body "## Automated CI/CD Fixes
+
+This PR contains automated fixes for CI/CD failures detected after pushing commit $LAST_COMMIT.
+
+### Failures Fixed:
+$(echo "$FAILED_CHECKS" | jq -r '.name' | sed 's/^/- /')
+
+### Changes Made:
+- ✅ Linting fixes applied
+- ✅ Dependencies updated
+- ✅ Formatting corrected
+
+### Next Steps:
+1. Review the changes
+2. Run tests locally
+3. Merge if all checks pass
+
+---
+🤖 *Automated fix by post-push hook*" \
+                --base "$CURRENT_BRANCH"
+            
+            # Switch back to original branch
+            git checkout "$CURRENT_BRANCH"
+        else
+            echo -e "${YELLOW}No changes needed after fix attempts${NC}"
+            git checkout "$CURRENT_BRANCH"
+            git branch -d "$FIX_BRANCH"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  No automated fixes available. Manual intervention required.${NC}"
+        create_manual_fix_guide
+    fi
+}
+
+# Function to create fix TODOs
+create_fix_todo() {
+    local failure_type=$1
+    local check_name=$2
+    
+    if [ ! -f ".claude/ci-fix-todo.md" ]; then
+        cat > .claude/ci-fix-todo.md << EOF
+# CI/CD Fix TODO
+
+## Failed Checks
+EOF
+    fi
+    
+    echo "- [ ] Fix $failure_type failure in $check_name" >> .claude/ci-fix-todo.md
+}
+
+# Function to create manual fix guide
+create_manual_fix_guide() {
+    cat > .claude/ci-fix-guide.md << EOF
+# CI/CD Failure Fix Guide
+
+## Failed Commit: $LAST_COMMIT
+
+### Failed Checks:
+$(echo "$FAILED_CHECKS" | jq -r '.name' | sed 's/^/- /')
+
+### How to Fix:
+
+1. **Review the failures:**
+   \`\`\`bash
+   gh run list --commit $LAST_COMMIT
+   gh run view  # Select the failed run
+   \`\`\`
+
+2. **Common fixes by failure type:**
+
+   **Linting failures:**
+   \`\`\`bash
+   npm run lint:fix
+   # or
+   npx eslint . --fix
+   \`\`\`
+
+   **Test failures:**
+   \`\`\`bash
+   npm test -- --verbose
+   # Fix the failing tests
+   \`\`\`
+
+   **Build failures:**
+   \`\`\`bash
+   npm install
+   npm run build
+   \`\`\`
+
+3. **Create fix commit:**
+   \`\`\`bash
+   git add .
+   git commit -m "fix: CI/CD failures"
+   git push
+   \`\`\`
+
+### Useful Commands:
+- View workflow logs: \`gh run view --log\`
+- Re-run failed jobs: \`gh run rerun --failed\`
+- Watch run status: \`gh run watch\`
+EOF
+    
+    echo -e "${BLUE}Created fix guide at: ${YELLOW}.claude/ci-fix-guide.md${NC}"
+}
+
+# Main execution
+if command -v gh &> /dev/null; then
+    # Check if we should monitor CI
+    if [ -f ".github/workflows" ] || gh api repos/$REPO_OWNER/$REPO_NAME/actions/workflows --jq '.total_count' 2>/dev/null | grep -q '[1-9]'; then
+        echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${CYAN}                    CI/CD MONITORING ACTIVE                 ${NC}"
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        
+        # Start monitoring in background
+        (
+            if check_ci_status; then
+                echo -e "\n${GREEN}🎉 All CI/CD checks passed! Great job!${NC}"
+            else
+                fix_ci_failures
+            fi
+        ) &
+        
+        CI_PID=$!
+        
+        echo -e "\n${BLUE}CI/CD monitoring started (PID: $CI_PID)${NC}"
+        echo -e "${YELLOW}You can continue working while CI runs.${NC}"
+        echo -e "\nTo check status manually: ${GREEN}gh run list${NC}"
+        echo -e "To stop monitoring: ${GREEN}kill $CI_PID${NC}"
+        
+        # Save PID for reference
+        echo $CI_PID > .claude/ci-monitor.pid
+    else
+        echo -e "\n${YELLOW}No GitHub Actions workflows detected${NC}"
+    fi
+else
+    echo -e "\n${YELLOW}GitHub CLI not installed. Install with: brew install gh${NC}"
+fi
+
+echo -e "\n${GREEN}Happy coding! 🚀${NC}\n"
+
+# Create PR if pushing a feature branch
+if [[ "$CURRENT_BRANCH" =~ ^feature/ ]]; then
+    echo -e "\n${PURPLE}🔄 Pull Request Management${NC}"
+    
+    # Check if PR already exists
+    EXISTING_PR=$(gh pr list --head "$CURRENT_BRANCH" --json number,state --jq '.[] | select(.state == "OPEN") | .number' | head -1)
+    
+    if [ -z "$EXISTING_PR" ]; then
+        echo -e "${BLUE}Creating pull request...${NC}"
+        
+        # Get linked task number
+        TASK_NUMBER=""
+        if [ -f ".claude/current-task.txt" ]; then
+            TASK_NUMBER=$(cat .claude/current-task.txt)
+        fi
+        
+        # Get feature name
+        FEATURE_NAME=${CURRENT_BRANCH#feature/}
+        
+        # Create PR title
+        if [ -n "$TASK_NUMBER" ]; then
+            # Get task title
+            TASK_TITLE=$(gh issue view "$TASK_NUMBER" --json title --jq '.title' 2>/dev/null || echo "")
+            PR_TITLE="feat: $TASK_TITLE"
+            
+            # Create PR body with task reference
+            PR_BODY="## Summary
+Implements feature for task #$TASK_NUMBER
+
+## Changes
+- Implementation as specified in the task
+- Tests added/updated
+- Documentation updated
+
+## Related Task
+Fixes #$TASK_NUMBER
+
+## Checklist
+- [ ] Code follows SOLID principles
+- [ ] No code duplication (DRY)
+- [ ] Functions are small and focused
+- [ ] Tests are passing
+- [ ] Documentation is updated
+- [ ] CI/CD checks pass
+
+---
+*Created automatically by GitFlow+Kanban workflow*"
+        else
+            PR_TITLE="feat: $FEATURE_NAME"
+            PR_BODY="## Summary
+Implementation of $FEATURE_NAME feature
+
+## Checklist
+- [ ] Code follows SOLID principles
+- [ ] Tests are passing
+- [ ] Documentation is updated"
+        fi
+        
+        # Create the PR
+        PR_URL=$(gh pr create \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY" \
+            --base develop \
+            --head "$CURRENT_BRANCH" \
+            2>&1)
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ Pull request created successfully!${NC}"
+            echo -e "${BLUE}PR URL: ${YELLOW}$PR_URL${NC}"
+            
+            # Extract PR number from URL
+            PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+            
+            # Update task with PR link if exists
+            if [ -n "$TASK_NUMBER" ] && [ -n "$PR_NUMBER" ]; then
+                gh issue comment "$TASK_NUMBER" --body "🔗 Pull Request created: #$PR_NUMBER"
+            fi
+            
+            # Save PR number for tracking
+            [ -n "$PR_NUMBER" ] && echo "$PR_NUMBER" > .claude/current-pr.txt
+        else
+            echo -e "${YELLOW}⚠️  Could not create PR automatically${NC}"
+            echo -e "${BLUE}Create manually with: ${GREEN}gh pr create${NC}"
+        fi
+    else
+        echo -e "${GREEN}✅ Pull request #$EXISTING_PR already exists${NC}"
+        echo -e "${BLUE}View PR: ${GREEN}gh pr view $EXISTING_PR${NC}"
+        
+        # Update PR number tracking
+        echo "$EXISTING_PR" > .claude/current-pr.txt
+    fi
+    
+    echo -e "\n${YELLOW}📌 Next Steps:${NC}"
+    echo -e "  1. Wait for CI/CD checks to complete"
+    echo -e "  2. Request code review if needed"
+    echo -e "  3. Address any feedback"
+    echo -e "  4. Merge when approved"
+    echo -e "  5. Run ${GREEN}git flow feature finish $FEATURE_NAME${NC}"
+fi
+
+# Note: This hook runs after git push completes
+# It monitors CI/CD in the background and attempts fixes if needed
