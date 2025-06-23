@@ -1,0 +1,178 @@
+# Kanban Workflow Rules for GitHub Project Management
+
+## Core Kanban Principles
+
+### 1. Work In Progress (WIP) Limits
+- **In Progress**: Maximum 3 items per developer
+- **In Review**: Maximum 2 items
+- **Testing**: Maximum 2 items
+- **Blocked**: No limit (but requires immediate attention)
+
+### 2. Pull System Rules
+
+#### When to Pull New Work
+PULL a new item when ALL conditions are met:
+- [ ] Current WIP is below limit
+- [ ] No blocked items need resolution
+- [ ] Previous item reached "Done" or "In Review"
+- [ ] Daily standup completed (context awareness)
+
+#### Priority Order for Pulling
+1. **URGENT**: Blocked items that you can unblock
+2. **HIGH**: Items blocking other team members
+3. **NORMAL**: Next item by these criteria:
+   - Dependencies satisfied (check Dependency Status field)
+   - Highest story points in "Ready" column
+   - Oldest "Ready" item (FIFO as tiebreaker)
+4. **LOW**: Technical debt or nice-to-have features
+
+### 3. Item Selection Algorithm
+
+```bash
+# Pseudo-code for selecting next item
+SELECT next_item WHERE:
+  status = "Ready" OR "Todo"
+  AND dependency_status IN ("Ready", "Partial")
+  AND implementation_phase = current_sprint_phase
+  AND NOT EXISTS (blocking_dependencies)
+ORDER BY:
+  priority DESC,
+  blocking_others DESC,
+  story_points DESC,
+  created_at ASC
+LIMIT 1
+```
+
+### 4. Pre-Pull Checklist
+
+Before pulling any item, verify:
+- [ ] Read the full description and acceptance criteria
+- [ ] Check all linked documentation
+- [ ] Verify dependencies are resolved
+- [ ] Estimate if you can complete within WIP limits
+- [ ] Check if anyone else is working on related items
+
+### 5. State Transitions
+
+#### Valid Transitions:
+- **Todo** → Ready → In Progress → In Review → Testing → Done
+- **Any State** → Blocked (with reason)
+- **Blocked** → Previous State (when unblocked)
+
+#### Transition Requirements:
+- **Todo → Ready**: All dependencies marked "Ready"
+- **Ready → In Progress**: WIP limit not exceeded
+- **In Progress → In Review**: All acceptance criteria met
+- **In Review → Testing**: Code review approved
+- **Testing → Done**: All tests passing
+
+### 6. Daily Workflow
+
+#### Morning (Start of Day):
+1. Check blocked items first
+2. Update status of current items
+3. Review WIP limits
+4. Pull new work if capacity available
+
+#### During Work:
+1. Update item status in real-time
+2. Add blockers immediately when found
+3. Comment progress on complex items
+4. Link PRs and commits to items
+
+#### End of Day:
+1. Update all item statuses
+2. Document any blockers
+3. Prepare items for tomorrow's pull
+4. Update time tracking (if used)
+
+### 7. Kanban Metrics to Track
+
+- **Lead Time**: Todo → Done duration
+- **Cycle Time**: In Progress → Done duration
+- **WIP Adherence**: % time within limits
+- **Throughput**: Items completed per sprint
+- **Blocked Time**: Average time items stay blocked
+
+### 8. Special Rules for Claude/AI
+
+When working with AI assistance:
+1. **Batch Related Items**: Pull multiple related items together
+2. **Context Preservation**: Document decisions in item comments
+3. **Explicit Status Updates**: Always update after AI sessions
+4. **Link Generation**: Connect all created files to items
+
+### 9. Emergency Procedures
+
+#### When All Items Are Blocked:
+1. Focus on unblocking highest priority
+2. Document blocking reasons
+3. Escalate to team if needed
+4. Consider pulling research/documentation tasks
+
+#### When WIP Limits Are Exceeded:
+1. STOP pulling new items
+2. Focus on completing current work
+3. Move items to "In Review" ASAP
+4. Help others review to clear pipeline
+
+### 10. Automation Commands
+
+```bash
+# Get next item to work on
+./tools/github-project-management/utilities/get-next-kanban-item.sh
+
+# Update item status
+./tools/github-project-management/utilities/update-status.sh [item-id] [status]
+
+# Check WIP limits
+./tools/github-project-management/utilities/check-wip-limits.sh
+
+# View blocked items
+./tools/github-project-management/utilities/list-blocked-items.sh
+```
+
+### 11. Definition of Ready
+
+An item is READY when:
+- [ ] Clear description and acceptance criteria
+- [ ] All dependencies identified and satisfied
+- [ ] Story points assigned
+- [ ] Documentation links added
+- [ ] No blocking dependencies
+
+### 12. Definition of Done
+
+An item is DONE when:
+- [ ] All acceptance criteria met
+- [ ] Code reviewed and approved
+- [ ] Tests written and passing
+- [ ] Documentation updated
+- [ ] No remaining blockers
+- [ ] Deployed (if applicable)
+
+### 13. Continuous Improvement
+
+Weekly review:
+- Analyze cycle times
+- Identify bottlenecks
+- Adjust WIP limits if needed
+- Update priority criteria
+- Refine automation scripts
+
+---
+
+## Quick Reference Card
+
+```
+DAILY KANBAN FLOW:
+1. Check blocks     🚫
+2. Update status    📊
+3. Check WIP        📈
+4. Pull if ready    ✅
+5. Work focused     🎯
+6. Update often     🔄
+7. Complete fast    ⚡
+```
+
+Remember: **Stop Starting, Start Finishing!**

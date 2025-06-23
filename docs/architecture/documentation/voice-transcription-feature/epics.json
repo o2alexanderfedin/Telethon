@@ -1,0 +1,47 @@
+[
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwViY",
+    "title": "Epic 1: Core Infrastructure & Raw API Support",
+    "documentation": {
+      "analysis": "./epic1-analysis.md",
+      "technical": "./technical-architecture.md#core-infrastructure",
+      "sprint_plan": "./sprint-1-plan.md"
+    }
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwVik",
+    "title": "Epic 2: User Type Management & Quota System",
+    "documentation": {
+      "analysis": "./epic2-analysis.md",
+      "technical": "./user-type-architecture.md",
+      "references": "./technical-architecture.md#rate-limiting-and-quotas"
+    }
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwViw",
+    "title": "Epic 3: High-Level API & Client Integration",
+    "documentation": {
+      "analysis": "./epic3-analysis.md",
+      "technical": "./technical-architecture.md#component-design",
+      "api_design": "./technical-architecture.md#integration-points"
+    }
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwVi0",
+    "title": "Epic 4: Advanced Features & Optimization",
+    "documentation": {
+      "analysis": "./epic4-analysis.md",
+      "technical": "./technical-architecture.md#performance-considerations",
+      "caching": "./technical-architecture.md#3-caching-strategy"
+    }
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwVi8",
+    "title": "Epic 5: Testing, Documentation & Polish",
+    "documentation": {
+      "analysis": "./epic5-analysis.md",
+      "testing": "./technical-architecture.md#testing-strategy",
+      "overview": "./README.md"
+    }
+  }
+]

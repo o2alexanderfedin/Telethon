@@ -1,0 +1,270 @@
+{
+  "mappings": [
+    {
+      "epic_id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwViY",
+      "epic_title": "Epic 1: Core Infrastructure & Raw API Support",
+      "user_stories": [
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTQ",
+          "title": "TL Schema Definitions",
+          "reason": "Core infrastructure - defines the foundational TL schema"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTU",
+          "title": "Basic Request Implementation",
+          "reason": "Core infrastructure - implements basic request handling"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTY",
+          "title": "Update Handling System",
+          "reason": "Core infrastructure - handles system updates"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTc",
+          "title": "Transcription State Management",
+          "reason": "Core infrastructure - manages transcription states"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTg",
+          "title": "Basic Transcription Manager",
+          "reason": "Core infrastructure - basic manager component"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTk",
+          "title": "Automatic Cleanup System",
+          "reason": "Core infrastructure - handles resource cleanup"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTo",
+          "title": "Error Handling Framework",
+          "reason": "Core infrastructure - error handling framework"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTs",
+          "title": "Basic Testing Infrastructure",
+          "reason": "Core infrastructure - establishes basic testing"
+        }
+      ]
+    },
+    {
+      "epic_id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwVik",
+      "epic_title": "Epic 2: User Type Management & Quota System",
+      "user_stories": [
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTw",
+          "title": "User Type Detection System",
+          "reason": "User management - detects user types"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXT0",
+          "title": "Quota Tracking Infrastructure",
+          "reason": "Quota system - tracks quota usage"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXT4",
+          "title": "Policy Engine Implementation",
+          "reason": "User management - implements policies"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXT8",
+          "title": "Quota Consumption Management",
+          "reason": "Quota system - manages consumption"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUA",
+          "title": "Usage Prediction and Warnings",
+          "reason": "Quota system - predicts usage and warns"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUE",
+          "title": "Premium User Experience",
+          "reason": "User management - premium features"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUI",
+          "title": "Error Handling and User Feedback",
+          "reason": "User management - error handling for users"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUM",
+          "title": "Integration with Core Infrastructure",
+          "reason": "User management - integrates with core"
+        }
+      ]
+    },
+    {
+      "epic_id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwViw",
+      "epic_title": "Epic 3: High-Level API & Client Integration",
+      "user_stories": [
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUQ",
+          "title": "Basic Transcription Method",
+          "reason": "High-level API - basic transcription method"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUU",
+          "title": "Message Object Integration",
+          "reason": "Client integration - integrates with message objects"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUY",
+          "title": "Event System for Transcription Progress",
+          "reason": "High-level API - event system"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUc",
+          "title": "Progress Callbacks and Async Patterns",
+          "reason": "High-level API - async patterns and callbacks"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUg",
+          "title": "Batch Transcription Support",
+          "reason": "High-level API - batch operations"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUk",
+          "title": "Quality Rating System",
+          "reason": "High-level API - quality ratings"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUo",
+          "title": "Comprehensive Error Handling",
+          "reason": "High-level API - comprehensive error handling"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUs",
+          "title": "Documentation and Examples",
+          "reason": "High-level API - documentation for API usage"
+        }
+      ]
+    },
+    {
+      "epic_id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwVi0",
+      "epic_title": "Epic 4: Advanced Features & Optimization",
+      "user_stories": [
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUw",
+          "title": "Intelligent Caching System",
+          "reason": "Optimization - caching system"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXU0",
+          "title": "Supergroup Boost Integration",
+          "reason": "Advanced features - supergroup integration"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXU4",
+          "title": "External STT Fallback System",
+          "reason": "Advanced features - external STT fallback"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXU8",
+          "title": "Request Batching Optimization",
+          "reason": "Optimization - request batching"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVA",
+          "title": "Memory Usage Optimization",
+          "reason": "Optimization - memory usage"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVE",
+          "title": "Performance Monitoring and Metrics",
+          "reason": "Optimization - performance monitoring"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVI",
+          "title": "Integration and Testing",
+          "reason": "Advanced features - integration testing"
+        }
+      ]
+    },
+    {
+      "epic_id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwVi8",
+      "epic_title": "Epic 5: Testing, Documentation & Polish",
+      "user_stories": [
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVM",
+          "title": "Comprehensive Test Coverage",
+          "reason": "Testing - comprehensive test coverage"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVQ",
+          "title": "Complete API Documentation",
+          "reason": "Documentation - complete API documentation"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVU",
+          "title": "User Experience Polish",
+          "reason": "Polish - UX improvements"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVY",
+          "title": "Performance Benchmarking",
+          "reason": "Testing - performance benchmarks"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVc",
+          "title": "Security Audit and Hardening",
+          "reason": "Polish - security audit"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVg",
+          "title": "Production Deployment Readiness",
+          "reason": "Polish - deployment readiness"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVk",
+          "title": "Monitoring and Analytics Setup",
+          "reason": "Polish - monitoring setup"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVo",
+          "title": "User Guide and Tutorials",
+          "reason": "Documentation - user guides"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVs",
+          "title": "API Rate Limiting Documentation",
+          "reason": "Documentation - rate limiting docs"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXVw",
+          "title": "Migration Guide for Existing Users",
+          "reason": "Documentation - migration guide"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXV0",
+          "title": "Performance Optimization Guide",
+          "reason": "Documentation - performance guide"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXV4",
+          "title": "Error Reference Documentation",
+          "reason": "Documentation - error reference"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXV8",
+          "title": "Integration Examples Repository",
+          "reason": "Documentation - integration examples"
+        },
+        {
+          "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXWA",
+          "title": "Release Notes and Changelog",
+          "reason": "Documentation - release notes"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_epics": 5,
+    "total_user_stories": 42,
+    "epic_distribution": {
+      "Epic 1": 8,
+      "Epic 2": 8,
+      "Epic 3": 8,
+      "Epic 4": 7,
+      "Epic 5": 11
+    }
+  }
+}
