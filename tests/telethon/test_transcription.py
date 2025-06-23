@@ -2,16 +2,23 @@
 Tests for voice message transcription functionality.
 
 This test suite covers the Basic Transcription Manager implementation
-including client methods, state management, and event handling.
+including client methods, state management, event handling, and automatic cleanup system.
 """
 
 import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, MagicMock
+import gc
+from unittest.mock import Mock, AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta
 
 from telethon import TelegramClient, types, functions, events
-from telethon.client.transcription import TranscriptionMixin, TranscriptionState
+from telethon.client.transcription import (
+    TranscriptionMixin, 
+    TranscriptionState, 
+    CleanupStrategy,
+    CleanupConfig,
+    CleanupMetrics
+)
 from telethon.events.transcription import TranscriptionUpdate, TranscriptionComplete
 
 
@@ -145,6 +152,12 @@ class TestTranscriptionMixin:
         client._transcription_states = {}
         client._transcription_callbacks = {}
         client._transcription_lock = asyncio.Lock()
+        
+        # Initialize cleanup system
+        client._cleanup_config = CleanupConfig()
+        client._cleanup_metrics = CleanupMetrics()
+        client._cleanup_task = None
+        client._cleanup_running = False
         
         return client
     
@@ -407,6 +420,423 @@ class TestTranscriptionIntegration:
     async def test_transcription_with_callbacks(self):
         """Test transcription with progress callbacks."""
         pass
+
+
+class TestCleanupConfig:
+    """Test CleanupConfig dataclass functionality."""
+    
+    def test_default_values(self):
+        """Test default configuration values."""
+        config = CleanupConfig()
+        
+        assert config.enabled is True
+        assert config.completed_ttl == 3600  # 1 hour
+        assert config.failed_ttl == 1800     # 30 minutes
+        assert config.pending_timeout == 300 # 5 minutes
+        assert config.max_total_states == 1000
+        assert config.max_completed_states == 500
+        assert config.cleanup_batch_size == 100
+        assert config.cleanup_interval == 300  # 5 minutes
+        assert config.background_cleanup is True
+        assert config.preserve_recent == 60
+        assert config.max_cleanup_percentage == 0.3
+    
+    def test_custom_values(self):
+        """Test custom configuration values."""
+        config = CleanupConfig(
+            enabled=False,
+            completed_ttl=7200,  # 2 hours
+            failed_ttl=900,      # 15 minutes
+            max_total_states=500,
+            cleanup_interval=600 # 10 minutes
+        )
+        
+        assert config.enabled is False
+        assert config.completed_ttl == 7200
+        assert config.failed_ttl == 900
+        assert config.max_total_states == 500
+        assert config.cleanup_interval == 600
+
+
+class TestCleanupMetrics:
+    """Test CleanupMetrics functionality."""
+    
+    def test_initialization(self):
+        """Test metrics initialization."""
+        metrics = CleanupMetrics()
+        
+        assert metrics.total_runs == 0
+        assert metrics.total_cleaned == 0
+        assert metrics.last_cleanup is None
+        assert metrics.last_cleanup_count == 0
+        assert metrics.average_cleanup_time == 0.0
+
+
+class TestAutomaticCleanup:
+    """Test automatic cleanup system functionality."""
+    
+    @pytest.fixture
+    def cleanup_client(self, mock_client):
+        """Create a client with cleanup system enabled."""
+        # Configure cleanup for testing
+        mock_client._cleanup_config = CleanupConfig(
+            enabled=True,
+            completed_ttl=60,     # 1 minute for testing
+            failed_ttl=30,        # 30 seconds for testing
+            pending_timeout=30,   # 30 seconds for testing
+            max_total_states=5,   # Low threshold for testing
+            max_completed_states=3,
+            cleanup_batch_size=10,
+            cleanup_interval=1,   # 1 second for testing
+            background_cleanup=False,  # Disable for unit tests
+            preserve_recent=5,    # 5 seconds
+            max_cleanup_percentage=0.8
+        )
+        
+        return mock_client
+    
+    def test_cleanup_config_integration(self, cleanup_client):
+        """Test cleanup configuration integration."""
+        config = CleanupConfig(
+            enabled=False,
+            completed_ttl=1800,
+            background_cleanup=False
+        )
+        
+        cleanup_client.configure_cleanup(config)
+        
+        assert cleanup_client._cleanup_config.enabled is False
+        assert cleanup_client._cleanup_config.completed_ttl == 1800
+        assert cleanup_client._cleanup_config.background_cleanup is False
+    
+    def test_cleanup_status(self, cleanup_client):
+        """Test getting cleanup system status."""
+        # Add some states
+        now = datetime.utcnow()
+        cleanup_client._transcription_states = {
+            "123:456": TranscriptionState(123, 456, now),
+            "789:012": TranscriptionState(789, 12, now - timedelta(minutes=2))
+        }
+        
+        status = cleanup_client.get_cleanup_status()
+        
+        assert 'enabled' in status
+        assert 'background_running' in status
+        assert 'total_states' in status
+        assert 'metrics' in status
+        assert 'config' in status
+        assert status['enabled'] is True
+        assert status['total_states'] == 2
+    
+    def test_cleanup_metrics_access(self, cleanup_client):
+        """Test accessing cleanup metrics."""
+        metrics = cleanup_client.get_cleanup_metrics()
+        
+        assert isinstance(metrics, CleanupMetrics)
+        assert metrics.total_runs == 0
+        assert metrics.total_cleaned == 0
+    
+    @pytest.mark.asyncio
+    async def test_age_based_cleanup(self, cleanup_client):
+        """Test age-based cleanup strategy."""
+        now = datetime.utcnow()
+        old_time = now - timedelta(minutes=5)
+        
+        # Create states of different ages
+        old_completed = TranscriptionState(123, 456, old_time)
+        old_completed.pending = False
+        old_completed.failed = False
+        old_completed.last_update = old_time
+        
+        old_failed = TranscriptionState(789, 12, old_time)
+        old_failed.pending = False
+        old_failed.failed = True
+        old_failed.last_update = old_time
+        
+        recent_state = TranscriptionState(111, 222, now)
+        recent_state.pending = False
+        recent_state.last_update = now
+        
+        # Add states to client
+        cleanup_client._transcription_states = {
+            "123:456": old_completed,
+            "789:012": old_failed,
+            "111:222": recent_state
+        }
+        
+        # Perform age-based cleanup
+        cleaned_count = cleanup_client._age_based_cleanup()
+        
+        # Should clean old completed and failed states, but not recent ones
+        assert cleaned_count >= 2
+        assert "111:222" in cleanup_client._transcription_states  # Recent should remain
+    
+    @pytest.mark.asyncio
+    async def test_count_based_cleanup(self, cleanup_client):
+        """Test count-based cleanup strategy."""
+        now = datetime.utcnow()
+        
+        # Create more states than the limit
+        states = {}
+        for i in range(10):  # More than max_total_states (5)
+            state = TranscriptionState(i, i * 100, now - timedelta(minutes=i))
+            state.pending = False  # Make them inactive
+            state.last_update = now - timedelta(minutes=i)
+            states[f"{i}:{i * 100}"] = state
+        
+        cleanup_client._transcription_states = states
+        
+        # Perform count-based cleanup
+        cleaned_count = cleanup_client._count_based_cleanup()
+        
+        # Should clean some states to get under the limit
+        assert cleaned_count > 0
+        assert len(cleanup_client._transcription_states) < 10
+    
+    @pytest.mark.asyncio
+    async def test_hybrid_cleanup(self, cleanup_client):
+        """Test hybrid cleanup strategy."""
+        now = datetime.utcnow()
+        
+        # Create mix of old and new states
+        states = {}
+        
+        # Old completed states
+        for i in range(3):
+            state = TranscriptionState(i, i * 100, now - timedelta(hours=2))
+            state.pending = False
+            state.failed = False
+            state.last_update = now - timedelta(hours=2)
+            states[f"{i}:{i * 100}"] = state
+        
+        # Recent active state (should not be cleaned)
+        active_state = TranscriptionState(999, 999, now)
+        active_state.pending = True
+        states["999:999"] = active_state
+        
+        cleanup_client._transcription_states = states
+        
+        # Perform hybrid cleanup
+        cleaned_count = cleanup_client._hybrid_cleanup()
+        
+        # Should clean old states but preserve active ones
+        assert cleaned_count >= 0
+        assert "999:999" in cleanup_client._transcription_states  # Active should remain
+    
+    @pytest.mark.asyncio
+    async def test_manual_cleanup_trigger(self, cleanup_client):
+        """Test manually triggering cleanup."""
+        now = datetime.utcnow()
+        
+        # Add old state that should be cleaned
+        old_state = TranscriptionState(123, 456, now - timedelta(hours=2))
+        old_state.pending = False
+        old_state.last_update = now - timedelta(hours=2)
+        cleanup_client._transcription_states["123:456"] = old_state
+        
+        # Trigger manual cleanup
+        result = await cleanup_client.trigger_cleanup(CleanupStrategy.AGE_BASED)
+        
+        assert result['success'] is True
+        assert 'strategy' in result
+        assert 'cleaned_count' in result
+        assert 'duration' in result
+        assert result['strategy'] == CleanupStrategy.AGE_BASED.value
+    
+    @pytest.mark.asyncio
+    async def test_cleanup_safety_checks(self, cleanup_client):
+        """Test cleanup safety mechanisms."""
+        now = datetime.utcnow()
+        
+        # Create active state (should never be cleaned)
+        active_state = TranscriptionState(123, 456, now)
+        active_state.pending = True  # Still active
+        
+        # Create very recent state (should be preserved)
+        recent_state = TranscriptionState(789, 12, now)
+        recent_state.pending = False
+        recent_state.last_update = now  # Very recent
+        
+        cleanup_client._transcription_states = {
+            "123:456": active_state,
+            "789:012": recent_state
+        }
+        
+        # Try to clean - should preserve both due to safety checks
+        cleaned_count = cleanup_client._age_based_cleanup()
+        
+        assert cleaned_count == 0  # Nothing should be cleaned
+        assert len(cleanup_client._transcription_states) == 2
+    
+    @pytest.mark.asyncio
+    async def test_cleanup_with_disabled_config(self, cleanup_client):
+        """Test cleanup behavior when disabled."""
+        # Disable cleanup
+        cleanup_client._cleanup_config.enabled = False
+        
+        # Try to trigger cleanup
+        result = await cleanup_client.trigger_cleanup()
+        
+        assert result['success'] is False
+        assert 'error' in result
+    
+    @pytest.mark.asyncio
+    async def test_background_cleanup_lifecycle(self, cleanup_client):
+        """Test background cleanup task lifecycle."""
+        # Enable background cleanup
+        cleanup_client._cleanup_config.background_cleanup = True
+        cleanup_client._cleanup_config.cleanup_interval = 0.1  # Very short for testing
+        
+        # Start background cleanup
+        cleanup_client._start_background_cleanup()
+        
+        assert cleanup_client._cleanup_running is True
+        assert cleanup_client._cleanup_task is not None
+        
+        # Let it run briefly
+        await asyncio.sleep(0.2)
+        
+        # Stop background cleanup
+        cleanup_client._stop_background_cleanup()
+        
+        assert cleanup_client._cleanup_running is False
+    
+    @pytest.mark.asyncio
+    async def test_cleanup_all_transcriptions(self, cleanup_client):
+        """Test cleaning up all inactive transcriptions."""
+        now = datetime.utcnow()
+        
+        # Add mix of active and inactive states
+        active_state = TranscriptionState(123, 456, now)
+        active_state.pending = True
+        
+        inactive_state1 = TranscriptionState(789, 12, now)
+        inactive_state1.pending = False
+        
+        inactive_state2 = TranscriptionState(111, 222, now)
+        inactive_state2.pending = False
+        inactive_state2.failed = True
+        
+        cleanup_client._transcription_states = {
+            "123:456": active_state,
+            "789:012": inactive_state1,
+            "111:222": inactive_state2
+        }
+        
+        # Clean all inactive transcriptions
+        cleaned_count = cleanup_client.cleanup_all_transcriptions()
+        
+        assert cleaned_count == 2  # Should clean 2 inactive states
+        assert len(cleanup_client._transcription_states) == 1  # Only active remains
+        assert "123:456" in cleanup_client._transcription_states
+    
+    def test_is_safe_to_clean(self, cleanup_client):
+        """Test cleanup safety checks."""
+        now = datetime.utcnow()
+        
+        # Active state - not safe to clean
+        active_state = TranscriptionState(123, 456, now)
+        active_state.pending = True
+        assert not cleanup_client._is_safe_to_clean(active_state)
+        
+        # Very recent inactive state - not safe to clean
+        recent_state = TranscriptionState(789, 12, now)
+        recent_state.pending = False
+        recent_state.last_update = now
+        assert not cleanup_client._is_safe_to_clean(recent_state)
+        
+        # Old inactive state - safe to clean
+        old_state = TranscriptionState(111, 222, now - timedelta(minutes=5))
+        old_state.pending = False
+        old_state.last_update = now - timedelta(minutes=5)
+        assert cleanup_client._is_safe_to_clean(old_state)
+    
+    @pytest.mark.asyncio
+    async def test_cleanup_metrics_update(self, cleanup_client):
+        """Test cleanup metrics are properly updated."""
+        now = datetime.utcnow()
+        
+        # Add state to clean
+        old_state = TranscriptionState(123, 456, now - timedelta(hours=2))
+        old_state.pending = False
+        old_state.last_update = now - timedelta(hours=2)
+        cleanup_client._transcription_states["123:456"] = old_state
+        
+        # Trigger cleanup and check metrics
+        initial_runs = cleanup_client._cleanup_metrics.total_runs
+        result = await cleanup_client.trigger_cleanup()
+        
+        assert cleanup_client._cleanup_metrics.total_runs == initial_runs + 1
+        assert cleanup_client._cleanup_metrics.last_cleanup is not None
+        assert cleanup_client._cleanup_metrics.last_cleanup_count >= 0
+    
+    @pytest.mark.asyncio 
+    async def test_scheduled_state_cleanup(self, cleanup_client):
+        """Test scheduled cleanup of specific states."""
+        now = datetime.utcnow()
+        
+        # Add state for scheduled cleanup
+        state = TranscriptionState(123, 456, now)
+        state.pending = False
+        state.last_update = now - timedelta(minutes=2)  # Old enough
+        cleanup_client._transcription_states["123:456"] = state
+        
+        # Schedule cleanup with very short delay
+        await cleanup_client._schedule_state_cleanup("123:456", delay=0.1)
+        
+        # State should be cleaned after delay
+        assert "123:456" not in cleanup_client._transcription_states
+
+
+class TestCleanupIntegration:
+    """Integration tests for cleanup system with transcription workflow."""
+    
+    @pytest.mark.asyncio
+    async def test_cleanup_integration_with_transcription(self, cleanup_client):
+        """Test cleanup integration with full transcription workflow."""
+        # Mock transcription completion that triggers cleanup
+        now = datetime.utcnow()
+        
+        # Simulate completed transcription
+        state = TranscriptionState(123, 456, now - timedelta(minutes=10))
+        state.pending = False
+        state.transcription_id = 789
+        state.text = "Test transcription"
+        cleanup_client._transcription_states["123:456"] = state
+        
+        # Simulate cleanup trigger
+        cleanup_client._cleanup_transcription("123:456")
+        
+        # Check that callbacks are cleaned and scheduled cleanup is triggered
+        assert "123:456" not in cleanup_client._transcription_callbacks
+    
+    @pytest.mark.asyncio
+    async def test_cleanup_performance_with_many_states(self, cleanup_client):
+        """Test cleanup performance with large number of states."""
+        now = datetime.utcnow()
+        
+        # Create large number of states
+        states = {}
+        for i in range(100):
+            state = TranscriptionState(i, i * 100, now - timedelta(minutes=i))
+            state.pending = False
+            state.last_update = now - timedelta(minutes=i)
+            states[f"{i}:{i * 100}"] = state
+        
+        cleanup_client._transcription_states = states
+        
+        # Measure cleanup performance
+        import time
+        start_time = time.time()
+        
+        result = await cleanup_client.trigger_cleanup(CleanupStrategy.HYBRID)
+        
+        duration = time.time() - start_time
+        
+        # Should complete reasonably quickly (less than 1 second for 100 states)
+        assert duration < 1.0
+        assert result['success'] is True
+        assert result['cleaned_count'] >= 0
 
 
 if __name__ == "__main__":
