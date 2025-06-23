@@ -1,5 +1,17 @@
 # Workflow Rules for Telethon Voice Transcription Development
 
+## Repository Management Rules
+
+### RULE 0: Always Check Current Repository
+- **What**: ALWAYS verify which repository you're working in before any operation
+- **How**: Run `pwd && git remote -v` to check:
+  - Current directory path
+  - Repository remotes
+- **Expected**: 
+  - Working directory: `/Users/alexanderfedin/Projects/demo/workspace/Telethon`
+  - Origin: `https://github.com/o2alexanderfedin/Telethon.git`
+- **Why**: Prevents working on wrong repository (e.g., telethon-architecture-docs vs Telethon)
+
 ## GitHub Project Management Rules
 
 ### RULE 1: Always Use Shell Scripts
