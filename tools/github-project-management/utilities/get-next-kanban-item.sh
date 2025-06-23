@@ -8,7 +8,7 @@ set -euo pipefail
 
 # Configuration
 PROJECT_OWNER="o2alexanderfedin"
-PROJECT_NUMBER="1"
+PROJECT_NUMBER=12
 MAX_WIP=3
 
 # Colors for output
@@ -86,7 +86,7 @@ PROJECT_ID=$(gh api graphql -f query='
         id
       }
     }
-  }' -f owner="$PROJECT_OWNER" -f number="$PROJECT_NUMBER" --jq '.data.user.projectV2.id')
+  }' -f owner="$PROJECT_OWNER" -F number=$PROJECT_NUMBER --jq '.data.user.projectV2.id')
 
 # Get current WIP count
 echo -e "${BLUE}Checking current Work In Progress...${NC}"
@@ -264,7 +264,8 @@ NEXT_ITEM=$(gh api graphql -f query='
   }' -f projectId="$PROJECT_ID" --jq '
   .data.node.items.nodes[] |
   select(
-    (.fieldValues.nodes[] | select(.field.name == "Status" and .name == "Todo")) and
+    ((.fieldValues.nodes[] | select(.field.name == "Status" and .name == "Todo")) or
+     (.fieldValues.nodes | map(select(.field.name == "Status")) | length == 0)) and
     ((.fieldValues.nodes[] | select(.field.name == "Dependency Status" and (.name == "Ready" or .name == "Partial"))) or 
      (.fieldValues.nodes | map(select(.field.name == "Dependency Status")) | length == 0))
   ) |
@@ -279,7 +280,7 @@ NEXT_ITEM=$(gh api graphql -f query='
   }' | jq -s 'sort_by(.priority // "Priority: Medium", .points // 0) | reverse | first')
 
 if [ -z "$NEXT_ITEM" ] || [ "$NEXT_ITEM" = "null" ]; then
-    echo -e "${YELLOW}No available items found in Todo status with satisfied dependencies.${NC}"
+    echo -e "${YELLOW}No available items found in Todo status or without status with satisfied dependencies.${NC}"
     echo -e "\nSuggestions:"
     echo -e "  1. Check if there are items in 'Ready' status"
     echo -e "  2. Review blocked items to see if any can be unblocked"

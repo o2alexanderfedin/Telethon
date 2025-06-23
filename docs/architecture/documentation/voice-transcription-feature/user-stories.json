@@ -1,0 +1,224 @@
+[
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTQ",
+    "title": "TL Schema Definitions",
+    "epic": "Epic 1",
+    "documentation": "./technical-architecture.md#architecture-to-epicstory-mapping"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTY",
+    "title": "Basic Request Implementation",
+    "epic": "Epic 1",
+    "documentation": "./technical-architecture.md#data-flow"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTg",
+    "title": "Update Handling System",
+    "epic": "Epic 1",
+    "documentation": "./technical-architecture.md#update-processing-flow"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTk",
+    "title": "Transcription State Management",
+    "epic": "Epic 1",
+    "documentation": "./technical-architecture.md#state-management"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXTo",
+    "title": "Basic Transcription Manager",
+    "epic": "Epic 1",
+    "documentation": "./technical-architecture.md#2-transcriptionmanager"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXT0",
+    "title": "Automatic Cleanup System",
+    "epic": "Epic 1",
+    "documentation": "./technical-architecture.md#2-transcriptionmanager"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXT8",
+    "title": "Error Handling Framework",
+    "epic": "Epic 1",
+    "documentation": "./technical-architecture.md#error-handling"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXUE",
+    "title": "Basic Testing Infrastructure",
+    "epic": "Epic 1",
+    "documentation": "./technical-architecture.md#testing-strategy"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXZY",
+    "title": "User Type Detection System",
+    "epic": "Epic 2",
+    "documentation": "./user-type-architecture.md#1-user-type-manager"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXZc",
+    "title": "Quota Tracking Infrastructure",
+    "epic": "Epic 2",
+    "documentation": "./technical-architecture.md#rate-limiting-and-quotas"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXZo",
+    "title": "Policy Engine Implementation",
+    "epic": "Epic 2",
+    "documentation": "./user-type-architecture.md#2-transcription-policy-engine"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXZ4",
+    "title": "Quota Consumption Management",
+    "epic": "Epic 2",
+    "documentation": "./user-type-architecture.md#3-enhanced-transcription-manager"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXZ8",
+    "title": "Usage Prediction and Warnings",
+    "epic": "Epic 2",
+    "documentation": "./user-type-architecture.md#1-quota-prediction"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXaE",
+    "title": "Premium User Experience",
+    "epic": "Epic 2",
+    "documentation": "./user-type-architecture.md#4-user-experience-handlers"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXaI",
+    "title": "Error Handling and User Feedback",
+    "epic": "Epic 2",
+    "documentation": "./user-type-architecture.md#4-user-experience-handlers"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXaY",
+    "title": "Integration with Core Infrastructure",
+    "epic": "Epic 2",
+    "documentation": "./user-type-architecture.md#3-enhanced-transcription-manager"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXe8",
+    "title": "Basic Transcription Method",
+    "epic": "Epic 3",
+    "documentation": "./technical-architecture.md#1-transcriptionmixin"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXfI",
+    "title": "Message Object Integration",
+    "epic": "Epic 3",
+    "documentation": "./technical-architecture.md#1-transcriptionmixin"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXfQ",
+    "title": "Event System for Transcription Progress",
+    "epic": "Epic 3",
+    "documentation": "./technical-architecture.md#3-event-system-integration"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXfc",
+    "title": "Progress Callbacks and Async Patterns",
+    "epic": "Epic 3",
+    "documentation": "./technical-architecture.md#3-event-system-integration"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXfo",
+    "title": "Batch Transcription Support",
+    "epic": "Epic 3",
+    "documentation": "./technical-architecture.md#2-request-batching"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXgA",
+    "title": "Quality Rating System",
+    "epic": "Epic 3",
+    "documentation": "./technical-architecture.md#1-transcriptionmixin"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXgE",
+    "title": "Comprehensive Error Handling",
+    "epic": "Epic 3",
+    "documentation": "./technical-architecture.md#error-handling"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXgI",
+    "title": "Documentation and Examples",
+    "epic": "Epic 3",
+    "documentation": "./README.md"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXko",
+    "title": "Intelligent Caching System",
+    "epic": "Epic 4",
+    "documentation": "./technical-architecture.md#3-caching-strategy"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXks",
+    "title": "Supergroup Boost Integration",
+    "epic": "Epic 4",
+    "documentation": "./user-type-architecture.md#2-supergroup-boost-integration"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXkw",
+    "title": "External STT Fallback System",
+    "epic": "Epic 4",
+    "documentation": "./user-type-architecture.md#3-fallback-strategies"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXk4",
+    "title": "Request Batching Optimization",
+    "epic": "Epic 4",
+    "documentation": "./technical-architecture.md#2-request-batching"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXlA",
+    "title": "Memory Usage Optimization",
+    "epic": "Epic 4",
+    "documentation": "./technical-architecture.md#1-memory-management"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXlI",
+    "title": "Performance Monitoring and Metrics",
+    "epic": "Epic 4",
+    "documentation": "./technical-architecture.md#performance-considerations"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXlM",
+    "title": "Integration and Testing",
+    "epic": "Epic 4",
+    "documentation": "./technical-architecture.md#testing-strategy"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXsU",
+    "title": "Comprehensive Test Coverage",
+    "epic": "Epic 5",
+    "documentation": "./technical-architecture.md#testing-strategy"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXsY",
+    "title": "Complete API Documentation",
+    "epic": "Epic 5",
+    "documentation": "./README.md"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXsg",
+    "title": "User Experience Polish",
+    "epic": "Epic 5",
+    "documentation": "./user-type-architecture.md#4-user-experience-handlers"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXso",
+    "title": "Performance Benchmarking",
+    "epic": "Epic 5",
+    "documentation": "./technical-architecture.md#3-performance-tests"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXsw",
+    "title": "Security Audit and Hardening",
+    "epic": "Epic 5",
+    "documentation": "./technical-architecture.md#security-considerations"
+  },
+  {
+    "id": "PVTI_lAHOBJ7Qkc4A8DsuzgbwXs8",
+    "title": "Production Deployment Readiness",
+    "epic": "Epic 5",
+    "documentation": "./feasibility-report.md"
+  }
+]

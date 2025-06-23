@@ -8,6 +8,10 @@ from .newmessage import NewMessage
 from .userupdate import UserUpdate
 from .callbackquery import CallbackQuery
 from .inlinequery import InlineQuery
+from .transcription import (
+    TranscriptionUpdate, TranscriptionComplete, TranscriptionProgress,
+    TranscriptionEvent
+)
 
 
 _HANDLERS_ATTRIBUTE = '__tl.handlers'
