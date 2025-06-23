@@ -15,7 +15,7 @@
 ## GitHub Project Management Rules
 
 ### RULE 1: Always Use Shell Scripts
-- **What**: Use shell scripts from `/Users/alexanderfedin/Projects/demo/tools/github-project-management/utilities/` for ALL GitHub project operations
+- **What**: Use shell scripts from `/Users/alexanderfedin/Projects/demo/scripts/github-project/` for ALL GitHub project operations
 - **Why**: Ensures consistency, maintainability, and automation across the workflow
 - **Scripts to use**:
   - `get-next-kanban-item-simple.sh` - Get next Task from kanban board
@@ -63,11 +63,11 @@
 
 ```bash
 # Get next task and start working
-/Users/alexanderfedin/Projects/demo/tools/github-project-management/utilities/get-next-kanban-item-simple.sh --auto-assign
+/Users/alexanderfedin/Projects/demo/scripts/github-project/get-next-kanban-item-simple.sh --auto-assign
 
 # Update task status manually
-/Users/alexanderfedin/Projects/demo/tools/github-project-management/utilities/update-task-status-simple.sh <task-number> "<status>"
+/Users/alexanderfedin/Projects/demo/scripts/github-project/update-task-status-simple.sh <task-number> "<status>"
 
 # Check PR status
-/Users/alexanderfedin/Projects/demo/tools/github-project-management/utilities/check-pr-status.sh
+/Users/alexanderfedin/Projects/demo/scripts/github-project/check-pr-status.sh
 ```
