@@ -1,5 +1,5 @@
 """
-Voice Transcription Error Handling Framework
+Error Handling Framework for Voice Transcription
 
 This module implements Epic 1 User Story 1.7: Error Handling Framework
 providing comprehensive error handling with custom exceptions, clear error messages,
@@ -25,12 +25,22 @@ from enum import Enum
 import sys
 import inspect
 
-from ..errors import RPCError, AuthKeyError, FloodWaitError
-from ..errors.rpcerrorlist import (
-    MessageNotModifiedError, MessageEmptyError, 
-    PeerIdInvalidError, ChatAdminRequiredError,
-    AudioContentUrlEmptyError, VoiceMessagesNotAllowedError
-)
+try:
+    from telethon.errors import RPCError, AuthKeyError, FloodWaitError
+    from telethon.errors.rpcerrorlist import (
+        MessageNotModifiedError, MessageEmptyError, 
+        PeerIdInvalidError, ChatAdminRequiredError
+    )
+    TELETHON_AVAILABLE = True
+except ImportError:
+    TELETHON_AVAILABLE = False
+    RPCError = Exception
+    AuthKeyError = Exception
+    FloodWaitError = Exception
+    MessageNotModifiedError = Exception
+    MessageEmptyError = Exception
+    PeerIdInvalidError = Exception
+    ChatAdminRequiredError = Exception
 
 
 logger = logging.getLogger(__name__)
@@ -55,7 +65,6 @@ class ErrorCategory(Enum):
     INTERNAL = "internal"              # Internal system errors
     CONFIGURATION = "configuration"    # Configuration errors
     RESOURCE = "resource"              # Resource exhaustion errors
-    QUOTA = "quota"                    # Quota/limit errors
 
 
 @dataclass
@@ -276,45 +285,6 @@ class TranscriptionNotAvailableError(VoiceTranscriptionError):
         self.reason = reason
 
 
-# Quota and Limit Errors
-
-class QuotaError(VoiceTranscriptionError):
-    """Base class for quota-related errors"""
-    
-    def __init__(self, message: str, **kwargs):
-        super().__init__(
-            message,
-            severity=ErrorSeverity.MEDIUM,
-            category=ErrorCategory.QUOTA,
-            recoverable=False,
-            **kwargs
-        )
-
-
-class TranscriptionQuotaExceededError(QuotaError):
-    """Error when transcription quota is exceeded"""
-    
-    def __init__(self, 
-                 trial_remains: Optional[int] = None,
-                 trial_expires: Optional[datetime] = None,
-                 **kwargs):
-        message = "Voice transcription quota exceeded"
-        if trial_remains is not None:
-            message += f" ({trial_remains} trials remaining)"
-        if trial_expires:
-            message += f", expires at {trial_expires}"
-            
-        super().__init__(message, **kwargs)
-        self.trial_remains = trial_remains
-        self.trial_expires = trial_expires
-        
-        self.add_recovery_action(RecoveryAction(
-            action_type="check_premium",
-            description="Consider upgrading to Telegram Premium for unlimited transcriptions",
-            automatic=False
-        ))
-
-
 # Rate Limiting Errors
 
 class RateLimitError(VoiceTranscriptionError):
@@ -378,11 +348,11 @@ class NetworkError(VoiceTranscriptionError):
         ))
 
 
-class TranscriptionTimeoutError(NetworkError):
-    """Error when transcription operation times out"""
+class TimeoutError(NetworkError):
+    """Error when operation times out"""
     
     def __init__(self, operation: str, timeout_seconds: float, **kwargs):
-        message = f"Transcription '{operation}' timed out after {timeout_seconds} seconds"
+        message = f"Operation '{operation}' timed out after {timeout_seconds} seconds"
         super().__init__(message, **kwargs)
         self.operation = operation
         self.timeout_seconds = timeout_seconds
@@ -485,11 +455,11 @@ class ResourceError(VoiceTranscriptionError):
         )
 
 
-class TranscriptionMemoryError(ResourceError):
+class MemoryError(ResourceError):
     """Error when memory resources are exhausted"""
     
     def __init__(self, current_usage: Optional[float] = None, **kwargs):
-        message = "Memory resources exhausted for transcriptions"
+        message = "Memory resources exhausted"
         if current_usage:
             message += f" (current usage: {current_usage:.1f}MB)"
         super().__init__(message, **kwargs)
@@ -506,7 +476,7 @@ class ConcurrencyLimitError(ResourceError):
     """Error when concurrency limits are exceeded"""
     
     def __init__(self, current_count: int, max_count: int, **kwargs):
-        message = f"Transcription concurrency limit exceeded: {current_count}/{max_count}"
+        message = f"Concurrency limit exceeded: {current_count}/{max_count}"
         super().__init__(message, **kwargs)
         self.current_count = current_count
         self.max_count = max_count
@@ -532,9 +502,8 @@ class ErrorHandler:
         self.logger = logging.getLogger(logger_name)
         self.error_counts: Dict[str, int] = {}
         self.recovery_attempts: Dict[str, int] = {}
-        self._lock = asyncio.Lock()
         
-    async def handle_error(
+    def handle_error(
         self,
         error: Exception,
         context: Optional[ErrorContext] = None,
@@ -551,15 +520,14 @@ class ErrorHandler:
         Returns:
             Classified VoiceTranscriptionError
         """
-        async with self._lock:
-            # Classify error
-            classified_error = self._classify_error(error, context)
-            
-            # Log error
-            self._log_error(classified_error)
-            
-            # Update metrics
-            self._update_metrics(classified_error)
+        # Classify error
+        classified_error = self._classify_error(error, context)
+        
+        # Log error
+        self._log_error(classified_error)
+        
+        # Update metrics
+        self._update_metrics(classified_error)
         
         # Reraise if requested
         if reraise:
@@ -580,53 +548,47 @@ class ErrorHandler:
                 error.context = context
             return error
             
-        # Classify Telethon-specific errors
-        if isinstance(error, FloodWaitError):
-            return TranscriptionRateLimitError(
-                retry_after=getattr(error, 'seconds', None),
-                context=context,
-                original_error=error
-            )
-            
-        if isinstance(error, PeerIdInvalidError):
-            return InvalidPeerError(
-                peer_id=getattr(context, 'peer_id', None) if context else None,
-                context=context,
-                original_error=error
-            )
-            
-        if isinstance(error, ChatAdminRequiredError):
-            return PermissionError(
-                operation=getattr(context, 'operation', 'unknown') if context else 'unknown',
-                context=context,
-                original_error=error
-            )
-            
-        if isinstance(error, AuthKeyError):
-            return AuthenticationError(
-                "Authentication failed",
-                context=context,
-                original_error=error
-            )
-            
-        if isinstance(error, (AudioContentUrlEmptyError, VoiceMessagesNotAllowedError)):
-            return TranscriptionNotAvailableError(
-                reason=str(error),
-                context=context,
-                original_error=error
-            )
-            
-        if isinstance(error, RPCError):
-            return APIError(
-                f"API error: {error}",
-                api_error_code=getattr(error, 'code', None),
-                context=context,
-                original_error=error
-            )
-            
+        # Classify based on error type
+        if TELETHON_AVAILABLE:
+            if isinstance(error, FloodWaitError):
+                return TranscriptionRateLimitError(
+                    retry_after=getattr(error, 'seconds', None),
+                    context=context,
+                    original_error=error
+                )
+                
+            if isinstance(error, (PeerIdInvalidError, MessageNotModifiedError)):
+                return InvalidPeerError(
+                    peer_id=getattr(context, 'peer_id', None) if context else None,
+                    context=context,
+                    original_error=error
+                )
+                
+            if isinstance(error, ChatAdminRequiredError):
+                return PermissionError(
+                    operation=getattr(context, 'operation', 'unknown') if context else 'unknown',
+                    context=context,
+                    original_error=error
+                )
+                
+            if isinstance(error, AuthKeyError):
+                return AuthenticationError(
+                    "Authentication failed",
+                    context=context,
+                    original_error=error
+                )
+                
+            if isinstance(error, RPCError):
+                return APIError(
+                    f"API error: {error}",
+                    api_error_code=getattr(error, 'code', None),
+                    context=context,
+                    original_error=error
+                )
+                
         # Standard Python errors
         if isinstance(error, asyncio.TimeoutError):
-            return TranscriptionTimeoutError(
+            return TimeoutError(
                 operation=getattr(context, 'operation', 'unknown') if context else 'unknown',
                 timeout_seconds=30.0,  # Default timeout
                 context=context,
@@ -641,7 +603,8 @@ class ErrorHandler:
             )
             
         if isinstance(error, MemoryError):
-            return TranscriptionMemoryError(
+            return ResourceError(
+                f"Memory error: {error}",
                 context=context,
                 original_error=error
             )
@@ -748,13 +711,13 @@ def handle_transcription_errors(
                         context.peer_id = bound_args.arguments['peer_id']
                     if 'msg_id' in bound_args.arguments:
                         context.msg_id = bound_args.arguments['msg_id']
-                    if 'entity' in bound_args.arguments:
-                        # Try to extract peer_id from entity
-                        entity = bound_args.arguments['entity']
-                        if isinstance(entity, int):
-                            context.peer_id = entity
+                    if 'chat' in bound_args.arguments:
+                        # Try to extract peer_id from chat
+                        chat = bound_args.arguments['chat']
+                        if isinstance(chat, int):
+                            context.peer_id = chat
                             
-                classified_error = await handler.handle_error(e, context, reraise=False)
+                classified_error = handler.handle_error(e, context, reraise=False)
                 
                 if reraise:
                     raise classified_error
@@ -771,10 +734,7 @@ def handle_transcription_errors(
                     operation=context_operation,
                     component=context_component
                 )
-                # Note: sync version doesn't support async handle_error
-                classified_error = handler._classify_error(e, context)
-                handler._log_error(classified_error)
-                handler._update_metrics(classified_error)
+                classified_error = handler.handle_error(e, context, reraise=False)
                 
                 if reraise:
                     raise classified_error
@@ -824,32 +784,47 @@ def get_automatic_recovery_actions(error: VoiceTranscriptionError) -> List[Recov
     return [action for action in error.recovery_actions if action.automatic]
 
 
-async def attempt_recovery(error: VoiceTranscriptionError, retry_func: Callable) -> Any:
-    """Attempt automatic recovery for an error"""
-    if not error.recoverable:
-        raise error
+# Example usage
+async def example_error_handling():
+    """Example of how to use the error handling framework"""
+    
+    handler = ErrorHandler()
+    
+    try:
+        # Simulate various errors
+        context = create_error_context(
+            operation="transcribe_voice",
+            component="basic_transcriber",
+            peer_id=123456,
+            msg_id=789
+        )
         
-    auto_actions = get_automatic_recovery_actions(error)
-    if not auto_actions:
-        raise error
+        # Raise a validation error
+        raise InvalidMessageError(context=context)
         
-    for action in auto_actions:
-        if action.action_type == "wait_and_retry":
-            retry_after = action.parameters.get('retry_after', 5)
-            await asyncio.sleep(retry_after)
-            return await retry_func()
-        elif action.action_type == "retry_request":
-            max_retries = action.parameters.get('max_retries', 3)
-            delay = action.parameters.get('delay', 5)
-            
-            for attempt in range(max_retries):
-                try:
-                    if attempt > 0:
-                        await asyncio.sleep(delay)
-                    return await retry_func()
-                except Exception as e:
-                    if attempt == max_retries - 1:
-                        raise
-                    logger.warning(f"Recovery attempt {attempt + 1}/{max_retries} failed: {e}")
-                    
-    raise error
+    except VoiceTranscriptionError as e:
+        # Error is already classified
+        print(f"Classified error: {e.get_user_friendly_message()}")
+        print(f"Error ID: {e.error_id}")
+        print(f"Recoverable: {e.recoverable}")
+        
+        if e.recovery_actions:
+            print("Recovery actions:")
+            for action in e.recovery_actions:
+                print(f"  - {action.description}")
+                
+    # Using the decorator
+    @handle_transcription_errors("test_operation", "test_component")
+    async def test_function():
+        raise ValueError("Test error")
+        
+    try:
+        await test_function()
+    except VoiceTranscriptionError as e:
+        print(f"Decorated function error: {e.error_id}")
+
+
+if __name__ == "__main__":
+    print("Voice Transcription Error Handling Framework")
+    print("See example_error_handling() function for usage patterns")
+    asyncio.run(example_error_handling())

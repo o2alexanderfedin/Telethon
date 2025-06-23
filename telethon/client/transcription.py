@@ -23,7 +23,8 @@ from enum import Enum
 
 from .. import functions, types, utils, hints
 from ..tl.custom import Message
-from .voice_errors import (
+# Import from voice_transcription module
+from .voice_transcription.error_handling import (
     VoiceTranscriptionError,
     InvalidMessageError,
     InvalidPeerError,
